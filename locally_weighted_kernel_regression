@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Apr 23 15:28:31 2022
+
+@author: hannahphan
+"""
+
+#!/Applications/anaconda3/envs/pyforge/bin/python
+## Locally weighted kernel regression/ k_NN.
+
+
+import numpy as np
+from numpy import linalg
+import scipy as scipy
+import matplotlib.pyplot as plt
+import matplotlib
+import math
+from math import pi
+from matplotlib.colors import Normalize
+from matplotlib import cm
+from matplotlib.patches import Circle
+#from mpl_toolkits.mplot3d import Axes3D
+#from mayavi import mlab
+   
+## parameters:
+N=20 # number of training data points
+k=5 # nearest points to use for k-NN regression
+sigma=1.2# for calculating weights as gaussian of distances
+#linear_fit=int(input("Enter linear_fit as 0 or 1: "))
+linear_fit=1    
+    
+input1=np.arange(0,1,0.001)
+input2=np.arange(0,1,0.001)
+INPUT1,INPUT2=np.meshgrid(input1,input2);
+#% Suppose the dependence is given by:
+value=np.sin(math.pi*INPUT2)*np.sin(math.pi*INPUT1);
+
+## make training data:
+#np.random.seed(7639); # For reproducibility
+## coordinates (INPUT1, INPUT2) of training data, add a third coordinate:
+X=np.array([[-0.87,-0.52,-0.73,-0.3,0.75,0.87,0.03,0.4,-0.54,-0.18,-0.69,0.57,0.62,-0.02,0.01,0.02,0.12,0.91,0.37,-0.46],
+[-0.26,0.48,0.23,0.47,-0.73,0.08,-0,0.19,0.84,-0.61,0.77,0.1,-0.68,0.58,-0.66,-0.24,-0.25,-0.57,-0.99,0.24]])
+X1=np.ones([1,20])
+X=np.vstack([X,X1])
+## column vector with values (labels) of training data:
+#V=2+X[1,:]**2-X[0,:];
+V=np.array([[1.02,-0.21,0.3,-0.38,1.29,0.68,0,-0.03,-0.55,0.64,-0.29,0.22,1.06,-0.58,0.66,0.24,0.26,1.4,1.13,-0.03]])
+
+## point that needs to be classified:
+x1=-0.25;x2=0.25;
+
+print('Calculate distances from training data to point:');
+d=np.zeros((N));
+print('for i=0:N;\n  d[i]=np.linalg.norm([x1,x2,1]-X[:,i]); \nend')
+for i in range(0,N):
+    d[i]=np.linalg.norm(np.array([x1,x2,1])-X[:,i]);
+#wait = input("Enter to continue...")
+
+print('sort distances, find k Nearest Neighbors, their distances d_NN,\n'
+      'and the kernel values K:');
+
+I=d.argsort(axis=0)
+#d.sort()
+radius=d[k-1]*1.1
+print("radius including all nearest neighbors=",radius)
+X_NN=X[:,I[0:k]];
+V_NN=V[:,I[0:k]];
+sigma=1.2
+d_NN=d[I[0:k]];
+print('K=diag(exp(-(d_NN/sigma)**2));');
+K=np.diag(np.exp(-(d_NN/sigma)));
+#wait = input("Enter to continue...")
+
+if False:
+    print('nearest neighbor coordinates:');
+    print(X_NN.T);
+    print('nearest neighbor labels (values):');
+    print(V_NN.T);
+    print('nearest neighbor distances:');
+    print(d_NN.T);
+    print('nearest neighbor weights:');
+    print(np.diag(K));
+    #wait = input("Enter to continue...")
+
+if linear_fit==0:
+  X_NN=np.vstack((X_NN[0,:],X_NN[1,:],X_NN[0,:]**2,X_NN[1,:]**2,X_NN[0,:]*X_NN[1,:],X_NN[2,:]));
+
+print('calculate regression coefficients:');
+print('w=np.linalg.inv(X_NN@K@X_NN.T)@(X_NN@K)@V_NN;');
+w=np.linalg.inv(X_NN@K@X_NN.T)@(X_NN@K)@V_NN.T;
+
+# Calculate local plane fit:
+x=np.arange(x1-0.2,x1+0.2,0.001);nx_plane=len(x);
+y=np.arange(x2-0.2,x2+0.2,0.001);ny_plane=len(y);
+x_plane,y_plane=np.meshgrid(x,y); 
+x_plane=x_plane.T; y_plane=y_plane.T
+x_plane2=x_plane**2;y_plane2=y_plane**2;x_planey_plane=x_plane*y_plane;
+if linear_fit==1:
+  plane_coordinates=np.vstack((x_plane.flatten(),y_plane.flatten(),x_plane.flatten()*0+1));
+else:
+  plane_coordinates=np.vstack((x_plane.flatten(),y_plane.flatten(),x_plane2.flatten()\
+                               ,y_plane2.flatten(),x_planey_plane.flatten()\
+                               ,x_plane.flatten()*0+1));
+
+z_plane=w.T@plane_coordinates;
+z_plane=np.reshape(z_plane,x_plane.shape);
+distance=np.sqrt((x_plane-x1)**2+(y_plane-x2)**2)
+z_plane=np.ma.masked_array(data=z_plane,mask=distance>1.1*radius,fill_value=9999999)
+
+print('predicted value based on optimal regression coefficients:');
+print('estimated_value=w.T@np.array([[x1,x2]]);');
+if linear_fit==1:
+  estimated_value=w.T@np.array([x1,x2,1]);
+else:
+  estimated_value=w.T@np.array([x1,x2,x1**2,x2**2,x1*x2,1]);
+
+true_value=np.sin(pi*x1)*np.sin(pi*x2);
+print("estimated_value=",estimated_value);
+print("true value=",true_value)
+print('X_NN (coordinates)=', X_NN)
+print('V_NN (labels)=', V_NN)
+print('d_NN (distances)=', d_NN)
+print('K (weights)=', np.diag(K))
+
+
+ fig1=plt.figure(1);plt.clf();
+# ########################################################################
+ plt.contour(INPUT1,INPUT2,value);#,'edgecolor','none');
+ plt.colorbar;
+ plt.axis('square')
+ plt.set_cmap('jet')
+ plt.xlabel('x')
+ plt.ylabel('y')
+ plt.pause(0.05)
+ dot_size=100;
+ ## draw training data. colors indicate label values:
+ plt.scatter(X[0,:],X[1,:],s=24,c=V,marker='x');
+
+ plt.scatter(x1,x2,s=400,marker='+');
+ ## draw a circle around point, indicating nearest neighbors
+ k=5
+ radius=d[k-1]*1.1
+ print("radius=",radius)
+ circ=Circle((x1,x2), radius=radius, color='black',fill=False)
+ ax=plt.gca();
+ ax.add_patch(circ)
+ plt.pause(0.05)
+
+if 0:
+     #%% save as pdf:
+     fig1.set_size_inches(4, 4)
+     fig1.savefig("Figures/Figure-kernel-regression-1.pdf",format='pdf');
+
+ ########################################################################
+ fig2 = mlab.figure(figure=2, bgcolor=(1,1,1))
+ mlab.surf(INPUT1.T, INPUT2.T, value.T, colormap='jet',opacity=0.9\
+           ,warp_scale=1);#'auto')
+ scalars=x_plane*0+0.001
+ mymesh=mlab.mesh(x_plane,y_plane,z_plane,colormap='gray',scalars=scalars \
+                  ,mask=z_plane.mask,opacity=0.9);
+mlab.view(azimuth=5, elevation=90, distance=3.0)
+mymesh.module_manager.scalar_lut_manager.lut.nan_color = 0, 0, 0, 0
+
+if 0:
+     #%% save as pdf:
+     if linear_fit==1:
+         figname="Figures/Figure-kernel-regression-2-linear.pdf"
+     else:
+         figname="Figures/Figure-kernel-regression-2-nonlinear.pdf"
+     mlab.savefig(figname);
+
+from mayavi import mlab
+mlab.show()
